@@ -1,0 +1,37 @@
+﻿golfer_name,api_name,tier_number,active
+Scottie Scheffler,Scottie Scheffler,1,TRUE
+Jon Rahm,Jon Rahm,1,TRUE
+Rory McIlroy,Rory McIlroy,1,TRUE
+Bryson DeChambeau,Bryson DeChambeau,1,TRUE
+Xander Schauffele,Xander Schauffele,1,TRUE
+Ludvig Aberg,Ludvig Aberg,1,TRUE
+Cameron Young,Cameron Young,2,TRUE
+Tommy Fleetwood,Tommy Fleetwood,2,TRUE
+Matt Fitzpatrick,Matt Fitzpatrick,2,TRUE
+Collin Morikawa,Collin Morikawa,2,TRUE
+Justin Rose,Justin Rose,2,TRUE
+Jordan Spieth,Jordan Spieth,2,TRUE
+Brooks Koepka,Brooks Koepka,3,TRUE
+Hideki Matsuyama,Hideki Matsuyama,3,TRUE
+Russell Henley,Russell Henley,3,TRUE
+Chris Gotterup,Chris Gotterup,3,TRUE
+Patrick Reed,Patrick Reed,3,TRUE
+Robert MacIntyre,Robert MacIntyre,3,TRUE
+Viktor Hovland,Viktor Hovland,4,TRUE
+Si Woo Kim,Si Woo Kim,4,TRUE
+Min Woo Lee,Min Woo Lee,4,TRUE
+Justin Thomas,Justin Thomas,4,TRUE
+Patrick Cantlay,Patrick Cantlay,4,TRUE
+Adam Scott,Adam Scott,4,TRUE
+Akshay Bhatia,Akshay Bhatia,5,TRUE
+Sepp Straka,Sepp Straka,5,TRUE
+Jason Day,Jason Day,5,TRUE
+Tyrrell Hatton,Tyrrell Hatton,5,TRUE
+Jake Knapp,Jake Knapp,5,TRUE
+Shane Lowry,Shane Lowry,5,TRUE
+Sam Burns,Sam Burns,6,TRUE
+Corey Conners,Corey Conners,6,TRUE
+Nicolai Hojgaard,Nicolai Hojgaard,6,TRUE
+Kurt Kitayama,Kurt Kitayama,6,TRUE
+Jacob Bridgeman,Jacob Bridgeman,6,TRUE
+Maverick McNealy,Maverick McNealy,6,TRUE

@@ -1,0 +1,206 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -544,
+        -48
+      ],
+      "id": "6e9c5ae1-290e-4a08-aeef-7be5d9d52a5d",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?tournamentId=401811941",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -368,
+        -48
+      ],
+      "id": "ded4fb1e-a8a5-4243-9fa3-ff0b50e0e5f3",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nconst competitors = data.events?.[0]?.competitions?.[0]?.competitors || [];\n\nif (!competitors.length) {\n  throw new Error('No competitors found - check JSON path');\n}\n\nconst out = [];\n\nfor (const c of competitors) {\n  const athlete = c.athlete || {};\n  const status = c.status || {};\n\n  const rawScore = c.score;\n\n  const name =\n    athlete.displayName ||\n    athlete.fullName ||\n    athlete.shortName ||\n    null;\n\n  if (!name) continue;\n\n  const positionRaw =\n    c.curatedRank?.current ??\n    c.order ??\n    c.rank ??\n    c.position?.displayValue ??\n    c.position?.value ??\n    null;\n\n  let positionNum = null;\n  if (typeof positionRaw === 'number') {\n    positionNum = positionRaw;\n  } else if (typeof positionRaw === 'string') {\n    const cleaned = positionRaw.replace(/^T/i, '');\n    const parsed = parseInt(cleaned, 10);\n    positionNum = Number.isNaN(parsed) ? null : parsed;\n  }\n\n  // score can be object, string, or number depending on feed\n  const scoreDisplay =\n    typeof rawScore === 'object' && rawScore !== null\n      ? (rawScore.displayValue ?? rawScore.value ?? rawScore.toPar ?? null)\n      : rawScore ?? null;\n\n  // try multiple locations for to-par\n  const toPar =\n    c.toPar ??\n    (typeof rawScore === 'object' && rawScore !== null ? rawScore.toPar : null) ??\n    c.statistics?.find(s =>\n      ['to par', 'topar', 'score'].includes(String(s?.name || '').toLowerCase())\n    )?.displayValue ??\n    c.statistics?.find(s =>\n      ['to par', 'topar', 'score'].includes(String(s?.name || '').toLowerCase())\n    )?.value ??\n    null;\n\n  // try multiple locations for thru\n  const thru =\n    c.thru ??\n    c.through ??\n    c.holesThrough ??\n    status.type?.shortDetail ??\n    status.type?.detail ??\n    status.displayValue ??\n    null;\n\n  let earnings = 0;\n  if (c.earnings?.value != null) {\n    earnings = Number(c.earnings.value);\n  } else if (c.earnings != null && !Number.isNaN(Number(c.earnings))) {\n    earnings = Number(c.earnings);\n  }\n\n  out.push({\n    golfer_name: name,\n    event_name: 'Masters',\n    position_raw: positionRaw != null ? String(positionRaw) : null,\n    position_num: positionNum,\n    to_par: toPar != null ? String(toPar) : null,\n    status: String(status.type?.state || status.displayValue || 'active').toLowerCase(),\n    earnings,\n    score_raw: scoreDisplay != null ? String(scoreDisplay) : null,\n    thru: thru != null ? String(thru) : null,\n    updated_at: new Date().toISOString(),\n  });\n}\n\nreturn out.map(row => ({ json: row }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -48
+      ],
+      "id": "c9e83f8f-ceac-4cf9-9db5-adbea2eb6f2b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "pool_golfers",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        48,
+        -48
+      ],
+      "id": "80d1020f-c2cd-4ea1-a19e-7fffe84dcf42",
+      "name": "Get many rows",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "43k8Du3DnGC3DBZ5",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        240,
+        -48
+      ],
+      "id": "b5253a73-3665-4f20-ba26-a1361f51e8c4",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst espnRows = [];\nconst dbGolfers = [];\n\n// Separate inputs\nfor (const item of items) {\n  const row = item.json;\n\n  if (row.golfer_name && row.event_name) {\n    espnRows.push(row);\n  }\n\n  if (row.id && (row.api_name || row.golfer_name)) {\n    dbGolfers.push(row);\n  }\n}\n\n// Build lookup map\nconst golferMap = new Map();\n\nfor (const g of dbGolfers) {\n  const key = (g.api_name || g.golfer_name || '').trim().toLowerCase();\n  if (key) golferMap.set(key, g.id);\n}\n\n// Match ESPN → DB\nconst out = [];\nconst unmatched = [];\n\nfor (const row of espnRows) {\n  const key = (row.golfer_name || '').trim().toLowerCase();\n  const golferId = golferMap.get(key);\n\n  if (!golferId) {\n    unmatched.push(row.golfer_name);\n    continue;\n  }\n\n  out.push({\n    json: {\n      golfer_id: golferId,\n      event_name: row.event_name,\n      position_raw: row.position_raw,\n      position_num: row.position_num,\n      to_par: row.to_par,\n      status: row.status,\n      earnings: row.earnings || 0,\n      score_raw: row.score_raw,\n      thru: row.thru,\n      updated_at: row.updated_at,\n    }\n  });\n}\n\n// Debug (check this in logs if needed)\nif (unmatched.length) {\n  console.log('Unmatched golfers:', unmatched);\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -48
+      ],
+      "id": "8324771f-c3e9-41f7-b0af-e5069f94f4c2",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.golfer_results (\n  golfer_id,\n  event_name,\n  position_raw,\n  position_num,\n  to_par,\n  status,\n  earnings,\n  score_raw,\n  thru,\n  updated_at\n)\nvalues (\n  {{$json.golfer_id}},\n  '{{$json.event_name}}',\n  {{ $json.position_raw ? \"'\" + $json.position_raw.replace(/'/g, \"''\") + \"'\" : 'null' }},\n  {{ $json.position_num ?? 'null' }},\n  {{ $json.to_par ? \"'\" + $json.to_par.replace(/'/g, \"''\") + \"'\" : 'null' }},\n  {{ $json.status ? \"'\" + $json.status.replace(/'/g, \"''\") + \"'\" : 'null' }},\n  {{ $json.earnings ?? 0 }},\n  {{ $json.score_raw ? \"'\" + $json.score_raw.replace(/'/g, \"''\") + \"'\" : 'null' }},\n  {{ $json.thru ? \"'\" + $json.thru.replace(/'/g, \"''\") + \"'\" : 'null' }},\n  {{ $json.updated_at ? \"'\" + $json.updated_at + \"'\" : 'now()' }}\n)\non conflict (golfer_id, event_name)\ndo update set\n  position_raw = excluded.position_raw,\n  position_num = excluded.position_num,\n  to_par = excluded.to_par,\n  status = excluded.status,\n  earnings = excluded.earnings,\n  score_raw = excluded.score_raw,\n  thru = excluded.thru,\n  updated_at = excluded.updated_at;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        640,
+        -48
+      ],
+      "id": "d7f569cc-fecc-4bf2-81b4-83b14e15d1f1",
+      "name": "Execute a SQL query",
+      "executeOnce": false,
+      "credentials": {
+        "postgres": {
+          "id": "bJRprYgHjaWLIVhu",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f41c77b3-c4b8-4d87-ac0f-d2eb7272a553",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c92027905a1e18f4de6a84dda63aebe0847ce19b98965b0a947a038cf40b6d42"
+  },
+  "id": "AtbG0zrBY3BCUKze",
+  "tags": []
+}
